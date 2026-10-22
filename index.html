@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Asesor de prompts</title>
+<meta name="description" content="Dime qué le vas a pedir a la IA: te digo qué modelo y esfuerzo usar, qué datos faltan y te devuelvo el prompt mejorado. Aprende de ti.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0A5A4E" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D3B37" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Asesor">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="iconos/icono.svg" type="image/svg+xml">
+<link rel="icon" href="iconos/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="iconos/asesor-180.png">
+<link rel="preload" href="fuentes/bricolage.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="estilos.css">
+<script src="js/tema.js"></script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<a class="saltar" href="#principal">Ir al contenido</a>
+
+<div id="sinServidor" class="aviso-fijo" hidden>
+  <strong>Abre la app desde su dirección web.</strong>
+  Si abriste este archivo con doble clic, el navegador bloquea el código. Sube la carpeta a tu página (GitHub Pages o Cloudflare) o ábrela con un servidor local: <code>python -m http.server 8000</code> y entra a <code>http://localhost:8000</code>.
+</div>
+<noscript><div class="aviso-fijo"><strong>Hace falta JavaScript.</strong> Actívalo en el navegador para usar el asesor.</div></noscript>
+
+<header class="cab">
+  <div class="cab-in">
+    <div class="marca">
+      <img class="logo" src="iconos/icono.svg" alt="" width="40" height="40">
+      <div class="cab-t">
+        <h1>Asesor de prompts</h1>
+        <span class="cab-s">Modelo, esfuerzo y prompt mejorado</span>
+      </div>
+    </div>
+    <div class="cab-acc">
+      <span id="pillSinRed" class="pill-red" hidden><i data-i="sinRed"></i><span>Sin conexión</span></span>
+      <button id="btnInstalar" class="btn-cab" type="button" hidden><i data-i="bajar"></i><span>Instalar</span></button>
+      <button id="btnTema" class="btn-icono" type="button" aria-label="Tema: automático. Toca para cambiarlo"><i data-i="auto"></i></button>
+    </div>
+  </div>
+</header>
+
+<nav class="pestanas" aria-label="Secciones">
+  <ul>
+    <li><button type="button" class="pestana" data-vista="asesor"><span class="pestana-ico"><i data-i="analizar"></i></span><span class="pestana-txt">Asesor</span></button></li>
+    <li><button type="button" class="pestana" data-vista="historial"><span class="pestana-ico"><i data-i="historial"></i><b id="insigniaHist" class="insignia" aria-hidden="true" hidden></b></span><span class="pestana-txt">Historial</span><span id="histSr" class="visualmente-oculto"></span></button></li>
+    <li><button type="button" class="pestana" data-vista="aprendizaje"><span class="pestana-ico"><i data-i="cerebro"></i></span><span class="pestana-txt">Aprendizaje</span></button></li>
+    <li><button type="button" class="pestana" data-vista="ajustes"><span class="pestana-ico"><i data-i="ajustes"></i></span><span class="pestana-txt">Ajustes</span></button></li>
+  </ul>
+</nav>
+
+<main id="principal" tabindex="-1">
+
+  <!-- ASESOR -->
+  <section id="vista-asesor" class="vista" aria-labelledby="t-asesor">
+    <div class="dos">
+      <div class="col-entrada">
+        <h2 id="t-asesor" class="titulo-vista" tabindex="-1">¿Qué le vas a pedir a la IA?</h2>
+        <p class="ayuda">Escribe o pega tu borrador. Te digo qué modelo y qué esfuerzo usar, qué datos faltan y te devuelvo el prompt mejorado para copiarlo.</p>
+
+        <div class="tarjeta entrada">
+          <label for="borrador" class="campo-et">Tu borrador</label>
+          <textarea id="borrador" rows="7" maxlength="20000" placeholder="Ej: hazme un script de PowerShell que copie los archivos de Descargas a una USB y me diga cuáles fallaron"></textarea>
+          <div class="fila">
+            <span id="contador" class="mono ayuda"></span>
+            <span class="espacio"></span>
+            <span class="grupo">
+              <button id="btnPegar" class="btn sec" type="button"><i data-i="pegar"></i><span>Pegar</span></button>
+              <button id="btnLimpiar" class="btn sec" type="button" hidden><i data-i="x"></i><span>Limpiar</span></button>
+            </span>
+          </div>
+          <div class="fila fila-analizar">
+            <span id="etiquetaMotor" class="pill"></span>
+            <span class="espacio"></span>
+            <button id="btnParar" class="btn sec" type="button" hidden><i data-i="parar"></i><span>Parar</span></button>
+            <button id="btnAnalizar" class="btn primario grande" type="button"><i data-i="analizar"></i><span>Analizar</span><kbd class="atajo" aria-hidden="true">Ctrl + Intro</kbd></button>
+          </div>
+          <p id="estado" class="estado" role="status" aria-live="polite"></p>
+        </div>
+
+        <details class="plegable tarjeta" id="detModelos">
+          <summary><span>Los 4 modelos y cuánto cuestan</span><i data-i="abajo"></i></summary>
+          <div id="listaModelos" class="modelos"></div>
+          <p class="ayuda">Precio de lista en USD por millón de tokens (entrada / salida), al 2026-10-06. El costo es relativo a Sonnet. Tu consumo real lo sigues viendo en tu cuenta.</p>
+        </details>
+      </div>
+
+      <div class="col-resultado">
+        <div id="vacio" class="vacio">
+          <span class="vacio-ico"><i data-i="escalera"></i></span>
+          <h3>Aquí verás la recomendación</h3>
+          <p class="ayuda">Modelo y esfuerzo sobre una escalera de costo, los datos que faltan y el prompt mejorado. Pruébalo con un ejemplo:</p>
+          <div id="ejemplos" class="chips"></div>
+        </div>
+
+        <article id="resultado" class="resultado" hidden tabindex="-1" aria-labelledby="tRes">
+          <div class="hero">
+            <div class="hero-top">
+              <div class="hero-modelo-caja">
+                <p class="etiqueta">Te recomiendo</p>
+                <h2 id="tRes" class="hero-modelo">—</h2>
+                <p id="resUso" class="hero-uso"></p>
+              </div>
+              <div class="hero-esf">
+                <p class="etiqueta">Esfuerzo (effort)</p>
+                <p id="resEsfuerzo" class="hero-esfuerzo">—</p>
+                <span id="resEsfuerzoId" class="mono"></span>
+              </div>
+            </div>
+            <div id="escalera" class="escalera" role="img"></div>
+            <div class="escalera-etq" aria-hidden="true"><span>Haiku</span><span>Sonnet</span><span>Opus</span><span>Fable</span></div>
+            <div class="chips-info">
+              <span id="resTipo" class="pill"></span>
+              <span id="resComplejidad" class="pill"></span>
+              <span id="resCosto" class="pill mono"></span>
+              <span id="resFuente" class="pill" hidden></span>
+            </div>
+          </div>
+
+          <p id="resMotivo" class="motivo"></p>
+          <div id="resAprendido" class="nota nota-aprendi" hidden><i data-i="cerebro"></i><p></p></div>
+          <div id="resBarata" class="nota nota-barata" hidden><i data-i="rayo"></i><p></p></div>
+
+          <section class="bloque" id="faltanBox" aria-labelledby="tFaltan">
+            <h3 id="tFaltan">Para que te entienda mejor</h3>
+            <ul id="faltan" class="faltan"></ul>
+          </section>
+
+          <section class="bloque" aria-labelledby="tMejorado">
+            <div class="fila">
+              <h3 id="tMejorado">Prompt mejorado</h3>
+              <span class="espacio"></span>
+              <span id="pendientes" class="pill sol" hidden></span>
+              <button id="btnPendiente" class="btn sec chico" type="button" hidden>Ir al primero</button>
+            </div>
+            <label for="mejorado" class="visualmente-oculto">Prompt mejorado (puedes editarlo antes de copiarlo)</label>
+            <textarea id="mejorado" class="codigo" spellcheck="false"></textarea>
+            <div class="fila acciones">
+              <button id="btnCopiar" class="btn primario" type="button"><i data-i="copiar"></i><span>Copiar prompt</span></button>
+              <button id="btnCompartir" class="btn sec" type="button" hidden><i data-i="compartir"></i><span>Compartir</span></button>
+              <button id="btnOtra" class="btn sec" type="button"><i data-i="repetir"></i><span>Mejorarlo otra vez</span></button>
+            </div>
+            <p class="ayuda">Puedes editarlo antes de copiarlo. Las líneas que repitas a mano dos veces, las incluyo solas la próxima vez.</p>
+          </section>
+
+          <section class="bloque" aria-labelledby="tFb">
+            <h3 id="tFb">¿Cómo te fue con esta recomendación?</h3>
+            <p class="ayuda">Con tus respuestas aprendo: la próxima vez ajusto el nivel para este tipo de tarea.</p>
+            <div id="fb" class="fb" role="group" aria-labelledby="tFb">
+              <button type="button" class="btn fb-btn" data-r="justo" aria-pressed="false"><i data-i="ok"></i><span>Justo</span></button>
+              <button type="button" class="btn fb-btn" data-r="corto" aria-pressed="false"><i data-i="sube"></i><span>Quedó corto</span></button>
+              <button type="button" class="btn fb-btn" data-r="sobro" aria-pressed="false"><i data-i="baja"></i><span>Sobró</span></button>
+            </div>
+            <p id="fbEfecto" class="ayuda" role="status" aria-live="polite"></p>
+          </section>
+
+          <details class="plegable bloque" id="detTipo">
+            <summary><span>¿Entendí mal el tipo de tarea?</span><i data-i="abajo"></i></summary>
+            <div class="fila">
+              <label for="selTipo" class="visualmente-oculto">Tipo de tarea correcto</label>
+              <select id="selTipo"></select>
+              <button id="btnTipo" class="btn sec" type="button">Corregir y recalcular</button>
+            </div>
+            <p class="ayuda">Aprendo las palabras de este borrador para acertar la próxima vez.</p>
+          </details>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- HISTORIAL -->
+  <section id="vista-historial" class="vista vista-angosta" aria-labelledby="t-historial" hidden>
+    <h2 id="t-historial" class="titulo-vista" tabindex="-1">Historial</h2>
+    <p class="ayuda">Cada análisis queda guardado en este aparato. Valorarlos es lo que me enseña.</p>
+    <div class="buscador">
+      <i data-i="buscar"></i>
+      <label for="buscar" class="visualmente-oculto">Buscar en el historial</label>
+      <input id="buscar" type="search" placeholder="Buscar en tus borradores" autocomplete="off">
+    </div>
+    <div id="filtros" class="chips" role="group" aria-label="Filtrar por valoración"></div>
+    <ul id="lista" class="lista"></ul>
+    <button id="btnMas" class="btn sec" type="button" hidden>Mostrar más</button>
+    <div id="histVacio" class="vacio" hidden></div>
+  </section>
+
+  <!-- APRENDIZAJE -->
+  <section id="vista-aprendizaje" class="vista vista-angosta" aria-labelledby="t-aprendizaje" hidden>
+    <h2 id="t-aprendizaje" class="titulo-vista" tabindex="-1">Lo que he aprendido de ti</h2>
+    <p class="ayuda">Todo se calcula en este aparato, sin IA y sin mandar nada a ninguna parte.</p>
+    <div id="cifras" class="cifras"></div>
+    <section class="bloque" aria-labelledby="t-cal">
+      <h3 id="t-cal">Ajuste por tipo de tarea</h3>
+      <p class="ayuda">Si valoras «Quedó corto» subo un nivel; si valoras «Sobró» bajo uno; «Justo» mantiene lo que ya tengo. Pesan más tus 3 últimas valoraciones.</p>
+      <ul id="calibracion" class="cal-lista"></ul>
+    </section>
+    <section class="bloque" aria-labelledby="t-hab">
+      <h3 id="t-hab">Lo que sueles añadir a tus prompts</h3>
+      <p class="ayuda">Líneas que escribiste a mano dos veces o más en el prompt mejorado. Ya las incluyo solas.</p>
+      <ul id="habitos" class="lista-sencilla"></ul>
+    </section>
+    <section class="bloque" aria-labelledby="t-pal">
+      <h3 id="t-pal">Palabras que asocié a un tipo de tarea</h3>
+      <p class="ayuda">Salen de tus correcciones de «¿Entendí mal el tipo de tarea?».</p>
+      <ul id="palabras" class="chips-lista"></ul>
+    </section>
+  </section>
+
+  <!-- AJUSTES -->
+  <section id="vista-ajustes" class="vista vista-angosta" aria-labelledby="t-ajustes" hidden>
+    <h2 id="t-ajustes" class="titulo-vista" tabindex="-1">Ajustes</h2>
+
+    <section class="tarjeta bloque-aj" aria-labelledby="t-perfil">
+      <h3 id="t-perfil">Mi perfil</h3>
+      <p class="ayuda">Esto se añade a tus prompts para darle contexto a la IA. Edítalo cuando cambie. No pongas claves ni contraseñas.</p>
+      <label for="perfil" class="visualmente-oculto">Mi perfil</label>
+      <textarea id="perfil" rows="6" maxlength="4000"></textarea>
+      <div class="fila">
+        <button id="btnPerfil" class="btn primario" type="button">Guardar perfil</button>
+        <button id="btnPerfilBase" class="btn sec" type="button">Volver al de ejemplo</button>
+      </div>
+    </section>
+
+    <section class="tarjeta bloque-aj" aria-labelledby="t-motor">
+      <h3 id="t-motor">Motor de análisis</h3>
+      <div class="segmentos" role="radiogroup" aria-labelledby="t-motor">
+        <label class="segmento"><input type="radio" name="motor" value="local"><span><b>En este aparato</b><small>Sin internet, gratis y privado. Aprende de ti.</small></span></label>
+        <label class="segmento"><input type="radio" name="motor" value="gemini"><span><b>Gemini (opcional)</b><small>Entiende mejor el texto. Usa tu clave gratuita.</small></span></label>
+      </div>
+      <div id="panelGemini" class="panel-gemini" hidden>
+        <div class="nota nota-aviso"><i data-i="aviso"></i><p>En el plan gratuito, Google puede usar lo que envías para mejorar sus productos. Tu borrador viaja sin claves ni contraseñas, pero no mandes datos de otras personas ni de las comunidades.</p></div>
+        <label for="clave" class="campo-et">Clave de Gemini</label>
+        <div class="campo-clave">
+          <input id="clave" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Pégala aquí">
+          <button id="btnVerClave" class="btn-icono" type="button" aria-label="Mostrar la clave" aria-pressed="false"><i data-i="ojo"></i></button>
+        </div>
+        <p class="ayuda">Se guarda solo en este aparato y no va en el respaldo. Créala gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> (botón «Create API key», que significa «Crear clave»).</p>
+        <label for="modeloGemini" class="campo-et">Modelo</label>
+        <input id="modeloGemini" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="fila">
+          <button id="btnGuardarClave" class="btn primario" type="button">Guardar</button>
+          <button id="btnProbar" class="btn sec" type="button">Probar conexión</button>
+          <button id="btnBorrarClave" class="btn sec peligro" type="button">Borrar clave</button>
+        </div>
+        <p id="estadoGemini" class="estado" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="tarjeta bloque-aj" aria-labelledby="t-datos">
+      <h3 id="t-datos">Mis datos</h3>
+      <p class="ayuda">Para tener lo mismo en el computador y en el teléfono: exporta en uno e importa en el otro. Lo importado se suma sin borrar lo que ya tienes.</p>
+      <div class="fila">
+        <button id="btnExportar" class="btn sec" type="button"><i data-i="bajar"></i><span>Exportar respaldo</span></button>
+        <button id="btnImportar" class="btn sec" type="button"><i data-i="subir"></i><span>Importar respaldo</span></button>
+        <input id="archivo" type="file" accept=".json,application/json" hidden>
+      </div>
+      <p class="ayuda">El respaldo lleva tu historial, tu perfil y lo aprendido. No lleva la clave de Gemini.</p>
+      <div class="fila">
+        <button id="btnBorrarHist" class="btn sec peligro" type="button"><i data-i="borrar"></i><span>Borrar historial</span></button>
+        <button id="btnOlvidar" class="btn sec peligro" type="button"><i data-i="deshacer"></i><span>Olvidar lo aprendido</span></button>
+      </div>
+      <p id="estadoAlmacen" class="estado"></p>
+    </section>
+
+    <section class="tarjeta bloque-aj" aria-labelledby="t-tema">
+      <h3 id="t-tema">Apariencia</h3>
+      <div class="segmentos tres" role="radiogroup" aria-labelledby="t-tema">
+        <label class="segmento"><input type="radio" name="tema" value="auto"><span><b>Automático</b><small>El del aparato</small></span></label>
+        <label class="segmento"><input type="radio" name="tema" value="light"><span><b>Claro</b></span></label>
+        <label class="segmento"><input type="radio" name="tema" value="dark"><span><b>Oscuro</b></span></label>
+      </div>
+    </section>
+
+    <section class="tarjeta bloque-aj" aria-labelledby="t-app">
+      <h3 id="t-app">Instalar y actualizar</h3>
+      <p id="estadoInstalada" class="ayuda"></p>
+      <div class="fila">
+        <button id="btnInstalar2" class="btn primario" type="button"><i data-i="bajar"></i><span>Instalar la app</span></button>
+        <button id="btnAyudaInstalar" class="btn sec" type="button">Cómo instalarla</button>
+        <button id="btnActualizar" class="btn sec" type="button"><i data-i="repetir"></i><span>Buscar actualización</span></button>
+      </div>
+      <p class="ayuda mono" id="version"></p>
+    </section>
+
+    <p class="pie">El costo es relativo y usa el precio de lista por token. Es una recomendación, no una orden: si dudas entre dos niveles, empieza por el más barato y sube si queda corto.</p>
+  </section>
+</main>
+
+<div id="avisos" class="avisos" role="status" aria-live="polite"></div>
+</body>
+</html>
