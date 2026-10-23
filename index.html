@@ -238,9 +238,10 @@
         <div class="nota nota-aviso"><i data-i="aviso"></i><p>En el plan gratuito, Google puede usar lo que envías para mejorar sus productos. Tu borrador viaja sin claves ni contraseñas, pero no mandes datos de otras personas ni de las comunidades.</p></div>
         <label for="clave" class="campo-et">Clave de Gemini</label>
         <div class="campo-clave">
-          <input id="clave" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Pégala aquí">
+          <input id="clave" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Pégala aquí" aria-describedby="infoClave">
           <button id="btnVerClave" class="btn-icono" type="button" aria-label="Mostrar la clave" aria-pressed="false"><i data-i="ojo"></i></button>
         </div>
+        <p id="infoClave" class="ayuda"></p>
         <p class="ayuda">Se guarda solo en este aparato y no va en el respaldo. Créala gratis en <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a> (botón «Create API key», que significa «Crear clave»).</p>
         <label for="modeloGemini" class="campo-et">Modelo</label>
         <input id="modeloGemini" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">

@@ -215,7 +215,9 @@ console.log('Gemini (respuestas falsas, sin red)');
   log('entiende JSON dentro de comillas invertidas', conCerca.modelo === 'sonnet');
   const errores = [
     ['clave mala (400 API key not valid)', respuesta({ error: { message: 'API key not valid' } }, 400), 'clave'],
-    ['clave sin permiso (403)', respuesta({}, 403), 'clave'],
+    ['clave inválida (400, API_KEY_INVALID)', respuesta({ error: { message: 'x', details: [{ reason: 'API_KEY_INVALID' }] } }, 400), 'clave'],
+    ['clave sin autorizar (401)', respuesta({}, 401), 'clave'],
+    ['sin permiso para ese modelo (403)', respuesta({}, 403), 'permiso'],
     ['límite de uso (429)', respuesta({}, 429), 'limite'],
     ['modelo que no existe (404)', respuesta({}, 404), 'modelo'],
     ['servicio caído (503)', respuesta({}, 503), 'servicio'],

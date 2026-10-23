@@ -8,19 +8,75 @@ export const MODELO_GEMINI = 'gemini-flash-lite-latest';
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
 const ESPERA_MS = 30000;
 
-export const claveValida = (c) => typeof c === 'string' && /^[\w-]{20,100}$/.test(c.trim());
+// Las claves de Google cambian de forma (antes «AIza…» de 39 letras; ahora también «AQ.…» de unas 53 y con punto).
+// Por eso aquí NO se exige una forma exacta: se limpia lo que se cuela al copiar y solo se rechaza lo que de seguro no sirve.
+// Quien decide si la clave vale es Google («Probar conexión»), no esta revisión.
+const INVISIBLES = /[\u00ad\u200b-\u200f\u2028\u2029\u2060\ufeff]/g;
+const COMILLAS = /^["'`“”‘’«»]+|["'`“”‘’«»;,]+$/g;
+const NOMBRE_ASIGNACION = /^(?:export\s+|set\s+|\$env:)?(?:x-goog-api-key|[a-z0-9_]*api[_-]?key|key)\s*[=:]\s*/i;
+const ENCABEZADO = /^bearer\s+/i;
+
+export function limpiarClave(texto) {
+  const cambios = [];
+  let c = String(texto == null ? '' : texto);
+  const sinInvisibles = c.replace(INVISIBLES, '');
+  if (sinInvisibles !== c) { cambios.push('quité caracteres invisibles'); c = sinInvisibles; }
+  c = c.trim();
+  const sinNombre = c.replace(NOMBRE_ASIGNACION, '').replace(ENCABEZADO, '');
+  if (sinNombre !== c) { cambios.push('quité el nombre que venía pegado antes de la clave'); c = sinNombre.trim(); }
+  const sinComillas = c.replace(COMILLAS, '').trim();
+  if (sinComillas !== c) { cambios.push('quité las comillas'); c = sinComillas; }
+  // Una clave partida por un salto de línea queda en 2 o 3 trozos largos; una frase tiene muchos trozos cortos y no se junta.
+  const trozos = c.split(/\s+/);
+  if (trozos.length > 1 && trozos.length <= 3 && trozos.every((t) => t.length >= 6)) { cambios.push('quité espacios o saltos de línea del medio'); c = trozos.join(''); }
+  const mitad = c.length / 2;
+  if (Number.isInteger(mitad) && mitad >= 20 && c.slice(0, mitad) === c.slice(mitad)) { cambios.push('estaba pegada dos veces: dejé una'); c = c.slice(0, mitad); }
+  return { clave: c, cambios };
+}
+
+// Dice qué tiene la clave sin mostrarla: solo largo y posición del problema.
+export function revisarClave(texto) {
+  const { clave, cambios } = limpiarClave(texto);
+  let problema = '';
+  if (!clave) problema = 'está vacía. Pégala en el campo.';
+  else if (clave.length < 20) problema = 'mide solo ' + clave.length + ' caracteres y las de Google miden unos 39 o 53. Se cortó al copiarla o no es la clave. Cópiala de nuevo desde AI Studio.';
+  else if (clave.length > 200) problema = 'mide ' + clave.length + ' caracteres y las de Google miden unos 39 o 53. ¿Pegaste otra cosa junto con la clave?';
+  else {
+    const e = clave.search(/\s/);
+    if (e >= 0) problema = 'tiene espacios en la posición ' + (e + 1) + ' y una clave no lleva espacios. ¿Pegaste una frase? Copia solo la clave.';
+    const i = e >= 0 ? -1 : clave.search(/[^\x21-\x7e]/);
+    if (i >= 0) problema = 'tiene un carácter raro en la posición ' + (i + 1) + ' (por ejemplo una letra con tilde o un símbolo de otro alfabeto). Cópiala de nuevo con «Copiar», sin escribirla a mano.';
+  }
+  const conocida = /^(?:AIza[\w-]{35}|AQ\.[\w.-]{20,})$/.test(clave);
+  const forma = !clave ? '' : clave.startsWith('AQ.') ? 'AQ' : clave.startsWith('AIza') ? 'AIza' : 'otra';
+  return { clave, cambios, ok: !problema, problema, largo: clave.length, forma, conocida };
+}
+
+export const claveValida = (c) => revisarClave(c).ok;
 export const modeloValido = (m) => typeof m === 'string' && /^[a-z0-9][a-z0-9._-]{2,60}$/i.test(m.trim());
 
 export class ErrorIA extends Error {
-  constructor(codigo, detalle) { super(MENSAJES[codigo] || MENSAJES.servicio); this.codigo = codigo; this.detalle = detalle || ''; }
+  // http y razon son el código que devolvió Google (por ejemplo 401 y ACCESS_TOKEN_TYPE_UNSUPPORTED): ayudan a saber la causa y no llevan la clave.
+  constructor(codigo, detalle, { http = 0, razon = '' } = {}) {
+    super(MENSAJES[codigo] || MENSAJES.servicio);
+    this.codigo = codigo; this.detalle = detalle || ''; this.http = http; this.razon = razon;
+  }
+  get codigoGoogle() { return [this.http || '', this.razon].filter(Boolean).join(' '); }
 }
 export const MENSAJES = {
   clave: 'Google no aceptó tu clave. Revísala en Ajustes (cópiala de nuevo desde AI Studio).',
+  tipoclave: 'Google no aceptó este tipo de clave (las nuevas, que empiezan con «AQ.») en esta consulta. Varias personas lo reportaron en los foros de Google. Crea otra clave en AI Studio, mejor en un proyecto nuevo, y vuelve a probar.',
+  restringida: 'Tu clave tiene una restricción (por sitio web o por dirección IP) y Google la bloqueó desde aquí. En AI Studio crea una clave sin restricciones.',
+  filtrada: 'Google bloqueó esa clave porque la marcó como expuesta (publicada o filtrada). Bórrala y crea una nueva en AI Studio.',
+  apagada: 'Esa clave no puede usar Gemini (el servicio está apagado en su proyecto o la clave está limitada a otros servicios). Crea una clave nueva en AI Studio.',
+  permiso: 'Google no dejó usar ese modelo con esta clave (permiso). Prueba otro modelo o crea una clave nueva en AI Studio.',
+  region: 'Gemini no está disponible desde tu ubicación o red en este momento (revisa si usas una VPN).',
   limite: 'Llegaste al límite gratuito de Gemini por ahora. Espera un rato; mientras tanto te doy la estimación de este aparato.',
   modelo: 'Ese modelo de Gemini no existe o no está disponible. Cámbialo en Ajustes.',
   servicio: 'Gemini no respondió bien (error del servicio). Intenta de nuevo en un momento.',
   bloqueado: 'Gemini no quiso analizar ese texto. Prueba reformularlo; mientras tanto te doy la estimación de este aparato.',
   formato: 'Gemini respondió en un formato que no pude leer. Intenta de nuevo.',
+  larga: 'La respuesta de Gemini se cortó por ser muy larga. Prueba con un borrador más corto; mientras tanto te doy la estimación de este aparato.',
   red: 'No hay conexión con Gemini. Te doy la estimación de este aparato.',
   tiempo: 'Gemini tardó demasiado. Te doy la estimación de este aparato.',
   cancelado: 'Análisis detenido.'
@@ -87,42 +143,67 @@ export function leerRespuestaIA(cadena) {
   };
 }
 
-export async function pedirGemini({ clave, modelo, borrador, perfil, senal, fetchFn = globalThis.fetch }) {
-  if (!claveValida(clave)) throw new ErrorIA('clave');
+// Traduce el error de Google a la causa más probable. Lo que más pesa es la «razón» que Google manda en details[].reason.
+export function clasificarError(status, datos) {
+  const e = (datos && datos.error) || {};
+  const msg = String(e.message || '');
+  const razon = (Array.isArray(e.details) ? e.details : []).map((d) => String((d && d.reason) || '')).find(Boolean) || '';
+  const todo = msg + ' ' + razon + ' ' + String(e.status || '');
+  const di = (codigo) => ({ codigo, razon, msg });
+  if (/leaked|reported as leaked/i.test(todo)) return di('filtrada');
+  if (/ACCESS_TOKEN_TYPE_UNSUPPORTED/.test(todo)) return di('tipoclave');
+  if (/API_KEY_(HTTP_REFERRER|IP_ADDRESS|ANDROID_APP|IOS_APP)_BLOCKED|referer|referrer|ip address restriction/i.test(todo)) return di('restringida');
+  if (/API_KEY_INVALID|API key not valid|API key expired|API_KEY_EXPIRED/i.test(todo) || status === 401) return di('clave');
+  if (/SERVICE_DISABLED|API_KEY_SERVICE_BLOCKED|has not been used in project|is disabled/i.test(todo)) return di('apagada');
+  if (/location is not supported|not available in your (country|region)/i.test(todo)) return di('region');
+  if (status === 403) return di('permiso');
+  if (status === 404) return di('modelo');
+  if (status === 429) return di('limite');
+  return di('servicio');
+}
+
+const pausa = (ms, senal) => new Promise((ok) => { const t = setTimeout(ok, ms); senal.addEventListener('abort', () => { clearTimeout(t); ok(); }, { once: true }); });
+
+// Si Google contesta 500 o 503 (saturado, pasa seguido en el plan gratis) se reintenta UNA vez; todo dentro del mismo límite de tiempo.
+export async function pedirGemini({ clave, modelo, borrador, perfil, senal, fetchFn = globalThis.fetch, reintentoMs = 1200 }) {
+  const revisada = revisarClave(clave);
+  if (!revisada.ok) throw new ErrorIA('clave');
   if (!modeloValido(modelo)) throw new ErrorIA('modelo');
   const ctrl = new AbortController();
   let vencio = false;
   const reloj = setTimeout(() => { vencio = true; ctrl.abort(); }, ESPERA_MS);
   if (senal) { if (senal.aborted) ctrl.abort(); else senal.addEventListener('abort', () => ctrl.abort(), { once: true }); }
-  let resp;
+  const pedido = {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': revisada.clave },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: armarPedidoIA(borrador, perfil) }] }],
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 8192 }
+    }),
+    signal: ctrl.signal
+  };
+  let resp, datos;
   try {
-    resp = await fetchFn(BASE + encodeURIComponent(modelo.trim()) + ':generateContent', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': clave.trim() },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: armarPedidoIA(borrador, perfil) }] }],
-        generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 4096 }
-      }),
-      signal: ctrl.signal
-    });
+    for (let intento = 0; intento < 2; intento++) {
+      resp = await fetchFn(BASE + encodeURIComponent(modelo.trim()) + ':generateContent', pedido);
+      try { datos = await resp.json(); } catch { datos = null; }
+      if (resp.ok || (resp.status !== 500 && resp.status !== 503) || intento === 1) break;
+      await pausa(reintentoMs, ctrl.signal);
+    }
   } catch (e) {
     if (e && e.name === 'AbortError') throw new ErrorIA(vencio ? 'tiempo' : 'cancelado');
     throw new ErrorIA('red');
   } finally { clearTimeout(reloj); }
 
-  let datos;
-  try { datos = await resp.json(); } catch { datos = null; }
   if (!resp.ok) {
-    const msg = String((datos && datos.error && datos.error.message) || '');
-    if (resp.status === 401 || resp.status === 403 || /api key/i.test(msg)) throw new ErrorIA('clave', msg);
-    if (resp.status === 404) throw new ErrorIA('modelo', msg);
-    if (resp.status === 429) throw new ErrorIA('limite', msg);
-    throw new ErrorIA('servicio', msg);
+    const { codigo, razon, msg } = clasificarError(resp.status, datos);
+    throw new ErrorIA(codigo, msg, { http: resp.status, razon });
   }
   if (datos && datos.promptFeedback && datos.promptFeedback.blockReason) throw new ErrorIA('bloqueado');
   const cand = datos && datos.candidates && datos.candidates[0];
   if (cand && cand.finishReason && /SAFETY|BLOCK|PROHIBITED/i.test(cand.finishReason) && !(cand.content && cand.content.parts)) throw new ErrorIA('bloqueado');
+  const cortada = !!(cand && cand.finishReason === 'MAX_TOKENS');
   const t = cand && cand.content && cand.content.parts && cand.content.parts.map((p) => p.text || '').join('');
-  if (!t) throw new ErrorIA('formato');
-  return leerRespuestaIA(t);
+  if (!t) throw new ErrorIA(cortada ? 'larga' : 'formato');
+  try { return leerRespuestaIA(t); } catch (e) { throw cortada && e instanceof ErrorIA ? new ErrorIA('larga') : e; }
 }

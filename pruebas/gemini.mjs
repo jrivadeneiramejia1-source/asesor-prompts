@@ -1,6 +1,7 @@
 // Motor opcional Gemini desde la pantalla, con respuestas simuladas (no gasta cuota ni usa claves reales).
 // Uso: node pruebas/gemini.mjs
 import fs from 'node:fs';
+import { revisarClave, limpiarClave, clasificarError, pedirGemini, ErrorIA } from '../js/ia.js';
 import { servir, lanzar, pagina, contador, esp, SALIDA } from './banco.mjs';
 
 const PUERTO = 8853, URL = `http://127.0.0.1:${PUERTO}/`;
@@ -12,6 +13,65 @@ const PS = 'hazme un script de powershell que copie descargas a una usb y me dig
 const RESP = { categoria: 'arquitectura', modelo: 'opus', esfuerzo: 'high', motivo: 'Es un diseño con varias partes que dependen entre sí.', alternativa_barata: { modelo: 'sonnet', esfuerzo: 'high', riesgo: 'Puede dejar huecos entre las partes.' }, faltan: ['Presupuesto', 'Plazo'], mejorado: 'Objetivo: diseñar la base de datos de equipos.\n\nPresupuesto: [COMPLETAR: cuánto puedes gastar]' };
 const ok = (obj) => ({ status: 200, contentType: 'application/json', body: JSON.stringify({ candidates: [{ content: { parts: [{ text: typeof obj === 'string' ? obj : JSON.stringify(obj) }] } }] }) });
 const hayAviso = async (page, re) => (await page.locator('.aviso span').allTextContents()).some((t) => re.test(t));
+
+
+console.log('Revisión de la clave (sin navegador)');
+const r1 = (n) => 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U1v2W3x4Y5z6'.slice(0, n);   // relleno sintético, no es una clave real
+const CLASICA = 'AIza' + r1(35), NUEVA = 'AQ.' + r1(25) + '.' + r1(24);
+log('acepta el formato clásico (AIza, 39)', revisarClave(CLASICA).ok && revisarClave(CLASICA).conocida && revisarClave(CLASICA).largo === 39);
+log('acepta el formato NUEVO con punto (AQ., 53): era lo que fallaba', revisarClave(NUEVA).ok && revisarClave(NUEVA).forma === 'AQ' && revisarClave(NUEVA).largo === 53);
+log('limpia espacios de los lados, comillas rectas y curvas', limpiarClave('  "' + CLASICA + '"\n').clave === CLASICA && limpiarClave('“' + NUEVA + '”').clave === NUEVA);
+log('una clave partida en 2 trozos largos se junta; una frase con espacios se rechaza diciendo dónde', limpiarClave(CLASICA.slice(0, 20) + '\n' + CLASICA.slice(20)).clave === CLASICA && !revisarClave('mi clave es ' + CLASICA).ok && /espacios en la posición 3/.test(revisarClave('mi clave es ' + CLASICA).problema));
+log('limpia el nombre pegado antes (GEMINI_API_KEY=, export, Bearer)', ['GEMINI_API_KEY=' + CLASICA, 'export GOOGLE_API_KEY="' + CLASICA + '"', 'Bearer ' + CLASICA, 'x-goog-api-key: ' + CLASICA].every((t) => limpiarClave(t).clave === CLASICA));
+log('quita caracteres invisibles y saltos de línea del medio', limpiarClave(CLASICA.slice(0, 10) + '​' + CLASICA.slice(10, 20) + '\n' + CLASICA.slice(20)).clave === CLASICA);
+log('si la pegaron dos veces, deja una', limpiarClave(CLASICA + CLASICA).clave === CLASICA && limpiarClave(CLASICA + CLASICA).cambios.some((c) => /dos veces/.test(c)));
+log('rechaza una clave corta o vacía diciendo el largo, sin mostrarla', !revisarClave('abc').ok && /mide solo 3/.test(revisarClave('abc').problema) && !revisarClave('').ok);
+log('rechaza una con tilde o símbolo raro, diciendo la posición y no el carácter', (() => { const r = revisarClave('AIza' + r1(10) + 'ñ' + r1(25)); return !r.ok && /posición 15/.test(r.problema) && !r.problema.includes('ñ'); })());
+const larga = Array.from({ length: 300 }, (_, i) => String.fromCharCode(65 + ((i * 7) % 26))).join('');
+log('rechaza algo demasiado largo (texto pegado de más)', !revisarClave(larga).ok && /mide 300/.test(revisarClave(larga).problema));
+log('una clave de otra forma pasa pero se marca como no conocida (Google decide)', revisarClave('k'.repeat(30)).ok && !revisarClave('k'.repeat(30)).conocida);
+log('el mensaje del problema nunca incluye la clave', !revisarClave(NUEVA + 'ñ').problema.includes(NUEVA.slice(0, 12)));
+
+console.log('Errores de Google → causa');
+const err = (status, error) => clasificarError(status, { error });
+log('clave inválida (400, API_KEY_INVALID)', err(400, { message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] }).codigo === 'clave');
+log('401 con ACCESS_TOKEN_TYPE_UNSUPPORTED → tipo de clave AQ.', (() => { const c = err(401, { message: 'x', details: [{ reason: 'ACCESS_TOKEN_TYPE_UNSUPPORTED' }] }); return c.codigo === 'tipoclave' && c.razon === 'ACCESS_TOKEN_TYPE_UNSUPPORTED'; })());
+log('clave restringida por sitio web o IP', err(403, { message: 'Requests from referer <empty> are blocked.', details: [{ reason: 'API_KEY_HTTP_REFERRER_BLOCKED' }] }).codigo === 'restringida');
+log('clave reportada como filtrada', err(403, { message: 'Your API key was reported as leaked. Please use another API key.' }).codigo === 'filtrada');
+log('servicio apagado en el proyecto', err(403, { message: 'Generative Language API has not been used in project 123 before or it is disabled.', details: [{ reason: 'SERVICE_DISABLED' }] }).codigo === 'apagada');
+log('ubicación no admitida', err(400, { message: 'User location is not supported for the API use.', status: 'FAILED_PRECONDITION' }).codigo === 'region');
+log('403 sin más datos → permiso; 404 → modelo; 429 → límite; 500 → servicio', err(403, { message: 'denied' }).codigo === 'permiso' && err(404, {}).codigo === 'modelo' && err(429, {}).codigo === 'limite' && err(500, {}).codigo === 'servicio');
+log('sin cuerpo (null) tampoco rompe', clasificarError(502, null).codigo === 'servicio');
+log('un 503 se reintenta una vez y si luego responde bien, sigue sin avisar error', await (async () => {
+  let n = 0;
+  const bueno = { categoria: 'powershell', modelo: 'sonnet', esfuerzo: 'medium', motivo: 'm', faltan: [], mejorado: 'x' };
+  const falso = async () => { n++; return n === 1 ? { ok: false, status: 503, json: async () => ({ error: { message: 'overloaded' } }) } : { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(bueno) }] } }] }) }; };
+  const r = await pedirGemini({ clave: CLASICA, modelo: 'gemini-flash-lite-latest', borrador: 'hola', perfil: '', fetchFn: falso, reintentoMs: 5 });
+  return n === 2 && r.modelo === 'sonnet';
+})());
+log('un 503 que se repite avisa «servicio» y no reintenta más de una vez', await (async () => {
+  let n = 0;
+  const falso = async () => { n++; return { ok: false, status: 503, json: async () => ({}) }; };
+  try { await pedirGemini({ clave: CLASICA, modelo: 'gemini-flash-lite-latest', borrador: 'hola', perfil: '', fetchFn: falso, reintentoMs: 5 }); } catch (e) { return e.codigo === 'servicio' && n === 2; }
+  return false;
+})());
+log('un error de clave (400) NO se reintenta', await (async () => {
+  let n = 0;
+  const falso = async () => { n++; return { ok: false, status: 400, json: async () => ({ error: { message: 'API key not valid' } }) }; };
+  try { await pedirGemini({ clave: CLASICA, modelo: 'gemini-flash-lite-latest', borrador: 'hola', perfil: '', fetchFn: falso, reintentoMs: 5 }); } catch (e) { return e.codigo === 'clave' && n === 1; }
+  return false;
+})());
+log('una respuesta cortada por largo (MAX_TOKENS) dice eso y no «formato»', await (async () => {
+  const falso = async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: '{"categoria":"powershell","mejorado":"se cor' }] } }] }) });
+  try { await pedirGemini({ clave: CLASICA, modelo: 'gemini-flash-lite-latest', borrador: 'hola', perfil: '', fetchFn: falso }); } catch (e) { return e.codigo === 'larga'; }
+  return false;
+})());
+log('pedirGemini limpia la clave antes de enviarla y reporta el código de Google', await (async () => {
+  let enviada = '';
+  const falso = async (url, o) => { enviada = o.headers['x-goog-api-key']; return { ok: false, status: 401, json: async () => ({ error: { message: 'x', details: [{ reason: 'ACCESS_TOKEN_TYPE_UNSUPPORTED' }] } }) }; };
+  try { await pedirGemini({ clave: ' "' + NUEVA + '" ', modelo: 'gemini-flash-lite-latest', borrador: 'hola', perfil: '', fetchFn: falso }); } catch (e) { return e instanceof ErrorIA && e.codigo === 'tipoclave' && e.codigoGoogle === '401 ACCESS_TOKEN_TYPE_UNSUPPORTED' && enviada === NUEVA; }
+  return false;
+})());
 
 const { ctx, page } = await pagina(br, { errores });
 const llamadas = [];
@@ -39,6 +99,12 @@ log('y analiza igual con el motor local, diciéndolo', (await page.textContent('
 await page.click('.pestana[data-vista=ajustes]');
 await page.fill('#clave', 'abc'); await page.click('#btnGuardarClave');
 log('una clave corta o rara se rechaza explicando qué hacer', /no parece válida/.test(await page.textContent('#estadoGemini')));
+await page.fill('#clave', 'abc');
+log('al escribir, debajo del campo se ve el largo y qué le pasa, sin mostrar la clave', /La clave mide solo 3/.test(await page.textContent('#infoClave')) && await page.isVisible('#infoClave'));
+await page.fill('#clave', ' "' + NUEVA + '" '); await page.fill('#modeloGemini', 'gemini-flash-lite-latest'); await page.click('#btnGuardarClave');
+log('una clave nueva con punto (AQ.) se guarda, limpiando las comillas y avisando qué se limpió', /Guardado/.test(await page.textContent('#estadoGemini')) && /quité las comillas/.test(await page.textContent('#estadoGemini')) && (await page.inputValue('#clave')) === NUEVA && (await page.evaluate(() => localStorage.getItem('asesor-prompts.clave'))) === NUEVA && /53 caracteres · formato nuevo \(AQ\.\)/.test(await page.textContent('#infoClave')));
+await page.fill('#clave', 'k'.repeat(30)); await page.click('#btnGuardarClave');
+log('una clave de otra forma se guarda, con aviso de que Google decide', /Guardado/.test(await page.textContent('#estadoGemini')) && /no empieza como las de Google/.test(await page.textContent('#estadoGemini')));
 await page.fill('#clave', CLAVE); await page.fill('#modeloGemini', '../../x'); await page.click('#btnGuardarClave');
 log('un nombre de modelo raro se rechaza', /nombre del modelo/.test(await page.textContent('#estadoGemini')));
 await page.fill('#modeloGemini', 'gemini-flash-lite-latest'); await page.click('#btnGuardarClave');
@@ -75,6 +141,7 @@ await page.screenshot({ path: SALIDA + '/gemini-resultado.png', fullPage: true }
 console.log('Cuando Gemini falla, el asesor no se rompe');
 const casos = [
   ['límite gratuito (429)', () => ({ status: 429, contentType: 'application/json', body: '{"error":{"message":"quota"}}' }), /límite gratuito/],
+  ['clave nueva AQ. rechazada (401)', () => ({ status: 401, contentType: 'application/json', body: '{"error":{"message":"x","details":[{"reason":"ACCESS_TOKEN_TYPE_UNSUPPORTED"}]}}' }), /tipo de clave/],
   ['clave no aceptada (400)', () => ({ status: 400, contentType: 'application/json', body: '{"error":{"message":"API key not valid. Please pass a valid API key."}}' }), /no aceptó tu clave/],
   ['modelo que no existe (404)', () => ({ status: 404, contentType: 'application/json', body: '{"error":{"message":"not found"}}' }), /no existe o no está disponible/],
   ['servicio caído (503)', () => ({ status: 503, contentType: 'application/json', body: '{}' }), /error del servicio/],
@@ -85,7 +152,7 @@ const casos = [
 for (const [nombre, r, re] of casos) {
   respuesta = r;
   await page.fill('#borrador', PS);
-  await page.click('#btnAnalizar'); await page.waitForSelector('#resultado:not([hidden])'); await esp(500);
+  await page.click('#btnAnalizar'); await page.waitForSelector('#resultado:not([hidden])'); await esp(/503/.test(nombre) ? 2300 : 500);   // el 503 se reintenta una vez (1,2 s)
   log(`${nombre}: avisa y da la estimación local`, (await hayAviso(page, re)) && /Sin Gemini/.test(await page.textContent('#resFuente')) && (await page.textContent('#tRes')) === 'Sonnet 5.5', (await page.locator('.aviso span').allTextContents()).join(' | '));
   log(`${nombre}: el botón vuelve a estar activo`, await page.isEnabled('#btnAnalizar'));
   await page.evaluate(() => document.querySelector('#avisos').replaceChildren());

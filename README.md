@@ -19,7 +19,9 @@ Todo se puede ver y olvidar en **Aprendizaje**.
 | **En este aparato** (por defecto) | Reglas + lo aprendido. Sin internet. | Nada | No sale nada |
 | **Gemini** (opcional, en Ajustes) | Entiende mejor el texto; lo aprendido se aplica encima de su recomendación. | Tu cuota gratuita de Google AI Studio | El borrador viaja a Google, **sin claves ni contraseñas**. En el plan gratuito Google puede usarlo para mejorar sus productos: no mandes datos de otras personas ni de las comunidades |
 
-La clave de Gemini es **tuya**: se pega en Ajustes, se guarda solo en ese aparato, va en un encabezado (no en la dirección) y **no entra en el respaldo**. Si Gemini falla (límite, clave, sin internet), el asesor responde con el motor del aparato y te dice por qué.
+La clave de Gemini es **tuya**: se pega en Ajustes, se guarda solo en ese aparato, va en un encabezado (no en la dirección) y **no entra en el respaldo**. Si Gemini falla (límite, clave, sin internet), el asesor responde con el motor del aparato y te dice por qué. Si Google contesta «saturado» (503), reintenta una vez solo.
+
+**Si la clave no entra.** Google ahora entrega claves nuevas que empiezan con `AQ.` (llevan un punto) además de las clásicas `AIza…`; la app acepta las dos. Al pegarla, debajo del campo se ve cuántos caracteres tiene y de qué forma es (nunca la muestra). Quita sola las comillas, los espacios o saltos de línea, el `GEMINI_API_KEY=` pegado antes y la clave repetida dos veces, y te dice qué limpió. «Probar conexión» es la prueba de verdad: si Google la rechaza, muestra la causa y el código que devolvió (por ejemplo `401 ACCESS_TOKEN_TYPE_UNSUPPORTED`: algunas cuentas con clave `AQ.` lo reportan en los foros de Google; ayuda crear otra clave en un proyecto nuevo).
 
 ## Computador ↔ teléfono
 
@@ -31,7 +33,7 @@ No hay sincronización automática (sería necesario un servidor). En **Ajustes 
 
 Hace falta una dirección `https://` para poder instalarla. Dos caminos, igual que tus otras apps:
 
-**A. Cloudflare (subir archivos).** `python3 pruebas/empaquetar.py` crea `asesor-prompts-1.0.0.zip` solo con lo necesario. En Cloudflare: *Workers y Pages* → *Crear* → *Pages* → *Cargar activos* (Upload assets), sube los archivos del ZIP descomprimido. `_headers` pone las cabeceras de seguridad.
+**A. Cloudflare (subir archivos).** `python3 pruebas/empaquetar.py` crea `asesor-prompts-<versión>.zip` solo con lo necesario. En Cloudflare: *Workers y Pages* → *Crear* → *Pages* → *Cargar activos* (Upload assets), sube los archivos del ZIP descomprimido. `_headers` pone las cabeceras de seguridad.
 
 **B. GitHub Pages** (repositorio público): *Settings* (Configuración) → *Pages* → *Deploy from a branch* (Desplegar desde una rama) → `main` / `/ (root)`. Pages ignora `_headers`; la etiqueta CSP de `index.html` hace el mismo trabajo.
 
@@ -51,8 +53,9 @@ npm run lint           # ESLint
 npm run motor          # motor, aprendizaje, guardado, importar/exportar, Gemini (sin red)
 npm run ui             # pantalla de punta a punta + accesibilidad (axe) + tamaños + errores de CSP
 npm run instalar       # manifest, iconos, sin internet, actualización, botón de instalar
-npm run gemini         # motor Gemini con respuestas simuladas (no gasta cuota)
+npm run gemini         # motor Gemini con respuestas simuladas (no gasta cuota): forma de la clave, errores de Google, reintento
 npm run pruebas        # las cuatro anteriores
+npm run lighthouse     # velocidad, accesibilidad y buenas prácticas (solo avisa)
 CAPTURAS=capturas npm run ui     # guarda fotos de cada tamaño
 ```
 

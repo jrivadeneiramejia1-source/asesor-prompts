@@ -5,7 +5,7 @@ import { MODELOS, ESFUERZOS, ESCALERA, CATEGORIAS, CATEGORIA, RESULTADOS, PERFIL
 import { analizarLocal, resultadoDesdeIA, estimarTokens, contarPendientes, ocultarSecretos } from './motor.js';
 import { ajusteDe, resumenAprendizaje, efectoProximo, registrarEdicion, habitosActivos, olvidarHabito, aprenderCategoria, olvidarPalabra } from './aprendizaje.js';
 import { crearAlmacen } from './almacen.js';
-import { pedirGemini, ErrorIA, claveValida, modeloValido, MODELO_GEMINI } from './ia.js';
+import { pedirGemini, ErrorIA, claveValida, revisarClave, modeloValido, MODELO_GEMINI } from './ia.js';
 import { ico, llenarIconos } from './iconos.js';
 
 const A = crearAlmacen();
@@ -510,6 +510,7 @@ function pintaAjustes() {
   for (const r of $$('input[name=motor]')) r.checked = r.value === m;
   $('#panelGemini').hidden = m !== 'gemini';
   if (document.activeElement !== $('#clave')) $('#clave').value = A.clave();
+  pintaInfoClave();
   if (document.activeElement !== $('#modeloGemini')) $('#modeloGemini').value = A.estado.ajustes.modelo || MODELO_GEMINI;
   for (const r of $$('input[name=tema]')) r.checked = r.value === A.estado.ajustes.tema;
   $('#estadoAlmacen').textContent = A.persistente ? '' : 'Este navegador no deja guardar datos (modo privado o bloqueado): lo que hagas se perderá al cerrarlo. Exporta un respaldo para no perderlo.';
@@ -518,16 +519,31 @@ function pintaAjustes() {
   $('#version').textContent = 'Versión ' + VERSION + ' · todo funciona sin internet';
 }
 
+function pintaInfoClave() {
+  const e = $('#infoClave'), r = revisarClave($('#clave').value);
+  if (!r.largo) { e.textContent = ''; return; }
+  const forma = r.forma === 'AQ' ? 'formato nuevo (AQ.)' : r.forma === 'AIza' ? 'formato clásico (AIza)' : '';
+  e.textContent = r.ok
+    ? r.largo + ' caracteres' + (r.conocida ? ' · ' + forma + ' · se ve bien.' : ' · no empieza como las de Google (AIza o AQ.); «Probar conexión» lo confirma.')
+    : 'La clave ' + r.problema;
+  e.classList.toggle('error', !r.ok);
+}
+
 async function guardarGemini({ silencioso = false } = {}) {
-  const clave = $('#clave').value.trim(), modelo = $('#modeloGemini').value.trim() || MODELO_GEMINI;
+  const r = revisarClave($('#clave').value), modelo = $('#modeloGemini').value.trim() || MODELO_GEMINI;
   const e = $('#estadoGemini');
   e.className = 'estado';
-  if (!claveValida(clave)) { e.classList.add('error'); e.textContent = 'La clave no parece válida: no debe tener espacios y debe medir al menos 20 caracteres. Cópiala de nuevo desde AI Studio.'; $('#clave').focus(); return false; }
+  if (!r.ok) { e.classList.add('error'); e.textContent = 'La clave no parece válida: ' + r.problema; $('#clave').focus(); return false; }
   if (!modeloValido(modelo)) { e.classList.add('error'); e.textContent = 'El nombre del modelo solo puede llevar letras, números, punto y guion. Ejemplo: ' + MODELO_GEMINI; $('#modeloGemini').focus(); return false; }
-  A.fijarClave(clave);
+  A.fijarClave(r.clave);
   A.fijarAjuste('modelo', modelo);
+  if (r.cambios.length) $('#clave').value = r.clave;
+  pintaInfoClave();
   pintaEtiquetaMotor();
-  if (!silencioso) { e.classList.add('ok'); e.textContent = 'Guardado en este aparato.'; }
+  if (!silencioso) {
+    e.classList.add('ok');
+    e.textContent = 'Guardado en este aparato.' + (r.cambios.length ? ' Limpié la clave: ' + r.cambios.join('; ') + '.' : '') + (r.conocida ? '' : ' Ojo: no empieza como las de Google (AIza o AQ.). Toca «Probar conexión» para confirmar.');
+  }
   return true;
 }
 
@@ -540,7 +556,7 @@ async function probarGemini() {
     await pedirGemini({ clave: A.clave(), modelo: A.estado.ajustes.modelo, borrador: 'traduce al inglés: hola', perfil: '' });
     e.className = 'estado ok'; e.textContent = 'Funciona: Gemini respondió bien.';
   } catch (err) {
-    e.className = 'estado error'; e.textContent = err instanceof ErrorIA ? err.message : 'No se pudo probar. Intenta de nuevo.';
+    e.className = 'estado error'; e.textContent = err instanceof ErrorIA ? err.message + (err.codigoGoogle ? ' (Código de Google: ' + err.codigoGoogle + ')' : '') : 'No se pudo probar. Intenta de nuevo.';
   }
   b.removeAttribute('aria-busy'); b.disabled = false;
 }
@@ -722,6 +738,7 @@ function conectar() {
     e.currentTarget.setAttribute('aria-label', ver ? 'Ocultar la clave' : 'Mostrar la clave');
     e.currentTarget.replaceChildren(iconoEl(ver ? 'ojoNo' : 'ojo'));
   });
+  $('#clave').addEventListener('input', pintaInfoClave);
   $('#btnGuardarClave').addEventListener('click', () => guardarGemini());
   $('#btnProbar').addEventListener('click', probarGemini);
   $('#btnBorrarClave').addEventListener('click', async () => {

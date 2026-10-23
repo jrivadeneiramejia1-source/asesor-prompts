@@ -1,7 +1,7 @@
 // Datos fijos: modelos, esfuerzos, la escalera que usa el aprendizaje y los tipos de tarea.
 // Precios de lista en USD por millón de tokens (entrada / salida), al 2026-10-06.
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.1.0';
 
 // Tablas sin prototipo: así un valor importado como «constructor» o «toString» no cuenta como modelo, tipo ni valoración.
 const sinProto = (o) => Object.assign(Object.create(null), o);

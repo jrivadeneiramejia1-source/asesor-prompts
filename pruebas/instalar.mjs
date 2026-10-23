@@ -10,6 +10,8 @@ const srv = await servir(PUERTO), br = await lanzar();
 const errores = [];
 const PS = 'hazme un script de powershell que copie descargas a una usb y me diga cuales fallaron';
 const dim = (f) => { const b = fs.readFileSync(path.join(RAIZ, f)); return b.slice(1, 4).toString() === 'PNG' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null; };
+const V_ACTUAL = fs.readFileSync(path.join(RAIZ, 'sw.js'), 'utf8').match(/const VERSION = '(asesor-v\d+)'/)[1];   // la versión que de verdad lleva sw.js
+const V_SIGUIENTE = 'asesor-v' + (Number(V_ACTUAL.split('-v')[1]) + 1);                                              // la que se simula al actualizar
 const hayAviso = async (page, re) => (await page.locator('.aviso span').allTextContents()).some((t) => re.test(t));
 
 console.log('Manifest e iconos');
@@ -60,7 +62,7 @@ const faltan = [...pedidos].filter((f) => f !== 'sw.js' && f !== './' && f !== '
 log('todo lo que la app pide está en la lista del trabajador (nada se queda sin guardar)', !faltan.length, faltan.join(', '));
 log('el trabajador queda activo y controla la página', await page.evaluate(() => !!navigator.serviceWorker.controller));
 const caches1 = await page.evaluate(async () => { const k = await caches.keys(); const c = await caches.open(k[0]); return { k, n: (await c.keys()).length }; });
-log('guarda una sola versión (asesor-v1) con todos los archivos', caches1.k.join() === 'asesor-v1' && caches1.n === BASICOS.length, JSON.stringify(caches1));
+log(`guarda una sola versión (${V_ACTUAL}) con todos los archivos`, caches1.k.join() === V_ACTUAL && caches1.n === BASICOS.length, JSON.stringify(caches1));
 
 console.log('Sin internet');
 await ctx.setOffline(true);
@@ -84,7 +86,7 @@ await page.click('.pestana[data-vista=ajustes]');
 await page.click('#btnActualizar');
 await page.waitForFunction(() => [...document.querySelectorAll('.aviso span')].some((s) => /última versión/.test(s.textContent)), null, { timeout: 8000 });
 log('sin versión nueva dice «Ya tienes la última versión»', true);
-srv.reemplazos['/sw.js'] = (t) => t.replace("'asesor-v1'", "'asesor-v2'");
+srv.reemplazos['/sw.js'] = (t) => t.replace(`'${V_ACTUAL}'`, `'${V_SIGUIENTE}'`);
 await page.click('#btnActualizar');
 await page.waitForSelector('.aviso button', { timeout: 10000 });
 log('con una versión nueva avisa y ofrece «Actualizar»', /versión nueva/.test(await page.locator('.aviso span').last().textContent()));
@@ -92,7 +94,7 @@ const recarga = page.waitForEvent('load', { timeout: 10000 });
 await page.click('.aviso button');
 await recarga; await esp(900);
 const caches2 = await page.evaluate(async () => (await caches.keys()).join());
-log('al actualizar se recarga, estrena asesor-v2 y borra la versión vieja', caches2 === 'asesor-v2', caches2);
+log(`al actualizar se recarga, estrena ${V_SIGUIENTE} y borra la versión vieja`, caches2 === V_SIGUIENTE, caches2);
 log('no se pierde nada: borrador y perfil siguen', (await page.inputValue('#borrador')) === 'borrador que debe sobrevivir a la actualización' && (await page.evaluate(() => JSON.parse(localStorage.getItem('asesor-prompts.v1')).perfil)) === 'perfil de prueba');
 delete srv.reemplazos['/sw.js'];
 await ctx.close();

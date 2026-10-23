@@ -1,6 +1,6 @@
 {
   "name": "asesor-prompts",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Asesor de prompts: app instalable que recomienda modelo y esfuerzo, mejora el prompt y aprende de tus valoraciones. No necesita compilarse; este archivo solo sirve para las pruebas.",
   "type": "module",
@@ -12,11 +12,13 @@
     "ui": "node pruebas/ui.mjs",
     "instalar": "node pruebas/instalar.mjs",
     "gemini": "node pruebas/gemini.mjs",
+    "lighthouse": "lhci autorun",
     "pruebas": "npm run motor && npm run ui && npm run instalar && npm run gemini",
     "test": "npm run lint && npm run pruebas"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@lhci/cli": "0.15.1",
     "axe-core": "4.14.0",
     "eslint": "10.12.0",
     "globals": "17.13.0",

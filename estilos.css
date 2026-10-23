@@ -141,6 +141,8 @@ main { flex: 1; width: 100%; max-width: 1080px; margin: 0 auto; padding: 20px ma
 @keyframes entra { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .titulo-vista { font-weight: 760; font-size: 1.55rem; letter-spacing: -.02em; line-height: 1.15; outline: none; text-wrap: balance; }
 .ayuda { color: var(--muted); font-size: .9rem; }
+.ayuda.error { color: var(--peligro); }
+#infoClave:empty { display: none; }
 h3 { font-weight: 700; font-size: 1.06rem; letter-spacing: -.005em; }
 .etiqueta { font: 700 .74rem/1.2 var(--f); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 

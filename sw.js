@@ -1,7 +1,7 @@
 // Trabajador de servicio: deja la app lista para abrir sin internet.
 // Cada versión guarda TODOS sus archivos juntos (cache cuyo nombre lleva la versión), así nunca se mezclan archivos nuevos con viejos.
 // Para publicar un cambio: sube VERSION aquí. Los aparatos que ya la tienen verán el aviso «Hay una versión nueva».
-const VERSION = 'asesor-v1';
+const VERSION = 'asesor-v2';
 
 const BASICOS = [
   './',

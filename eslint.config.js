@@ -9,10 +9,11 @@ const reglas = {
 };
 
 export default [
-  { ignores: ['node_modules/**', 'capturas/**'] },
+  { ignores: ['node_modules/**', 'capturas/**', '.lighthouseci/**'] },
   js.configs.recommended,
   { files: ['js/tema.js'], languageOptions: { ecmaVersion: 2023, sourceType: 'script', globals: { ...globals.browser } }, rules: reglas },
   { files: ['js/*.js'], ignores: ['js/tema.js'], languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.browser } }, rules: reglas },
   { files: ['sw.js'], languageOptions: { ecmaVersion: 2023, sourceType: 'script', globals: { ...globals.serviceworker } }, rules: reglas },
+  { files: ['lighthouserc.cjs'], languageOptions: { ecmaVersion: 2023, sourceType: 'commonjs', globals: { ...globals.node } }, rules: reglas },
   { files: ['pruebas/**/*.mjs', 'eslint.config.js'], languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.node, ...globals.browser, axe: 'readonly' } }, rules: { ...reglas, 'no-unused-vars': 'off' } }
 ];

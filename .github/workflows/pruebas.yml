@@ -40,6 +40,8 @@ jobs:
         run: npm run instalar
       - name: Gemini (simulado)
         run: npm run gemini
+      - name: Velocidad y accesibilidad (Lighthouse, solo avisa)
+        run: npm run lighthouse
       - name: Capturas de pantalla
         if: always()
         uses: actions/upload-artifact@v7
